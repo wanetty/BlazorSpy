@@ -1,0 +1,33 @@
+plugins {
+    id 'java'
+}
+
+group = 'blazorpack'
+version = '2.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // MessagePack for Java — replaces the bundled Python msgpack
+    implementation 'org.msgpack:msgpack-core:0.9.8'
+
+    // Gson for JSON parsing/formatting (lighter than Jackson)
+    implementation 'com.google.code.gson:gson:2.10.1'
+
+    // Burp Montoya API (provided by Burp at runtime)
+    compileOnly 'net.portswigger.burp.extensions:montoya-api:2024.7'
+
+    // Burp legacy API (provided by Burp at runtime, for IMessageEditorTab)
+    compileOnly 'net.portswigger.burp.extender:burp-extender-api:2.3'
+}
+
+// Fat JAR: bundles msgpack-core + gson so no external deps needed at runtime
+jar {
+    archiveBaseName = 'blazorpack-decode'
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
