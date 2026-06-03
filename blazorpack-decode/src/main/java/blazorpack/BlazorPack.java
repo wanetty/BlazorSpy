@@ -27,14 +27,16 @@ public class BlazorPack implements BurpExtension {
             new BlazorPackWsEditorProvider()
         );
 
-        api.logging().logToOutput("BlazorPack Decoder v2.0 cargado correctamente");
+        String version = getClass().getPackage().getImplementationVersion();
+        if (version == null) version = "dev";
+        api.logging().logToOutput("BlazorPack Decoder v" + version + " loaded");
         api.logging().logToOutput("  - msgpack: org.msgpack:msgpack-core:0.9.8");
-        api.logging().logToOutput("  - HTTP editor: registrado (Montoya)");
-        api.logging().logToOutput("  - WebSocket editor: registrado (Montoya)");
+        api.logging().logToOutput("  - HTTP editor: registered (Montoya)");
+        api.logging().logToOutput("  - WebSocket editor: registered (Montoya)");
         api.logging().logToOutput("");
-        api.logging().logToOutput("USO:");
-        api.logging().logToOutput("  1. Abre un mensaje WebSocket de Blazor en Proxy/Repeater");
-        api.logging().logToOutput("  2. Click en la pestana 'BlazorPack'");
-        api.logging().logToOutput("  3. Edita el JSON y re-envia");
+        api.logging().logToOutput("USAGE:");
+        api.logging().logToOutput("  1. Open a Blazor WebSocket message in Proxy/Repeater");
+        api.logging().logToOutput("  2. Click the 'BlazorPack' tab");
+        api.logging().logToOutput("  3. Edit the JSON and resend");
     }
 }

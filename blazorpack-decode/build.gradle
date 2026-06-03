@@ -19,13 +19,22 @@ dependencies {
     // Burp Montoya API (provided by Burp at runtime)
     compileOnly 'net.portswigger.burp.extensions:montoya-api:2024.7'
 
-    // Burp legacy API (provided by Burp at runtime, for IMessageEditorTab)
-    compileOnly 'net.portswigger.burp.extender:burp-extender-api:2.3'
+    // Testing
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 // Fat JAR: bundles msgpack-core + gson so no external deps needed at runtime
 jar {
     archiveBaseName = 'blazorpack-decode'
+    manifest {
+        attributes 'Implementation-Title': 'BlazorPack Decoder',
+                   'Implementation-Version': archiveVersion
+    }
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
