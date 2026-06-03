@@ -2,8 +2,15 @@ plugins {
     id 'java'
 }
 
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
 group = 'blazorpack'
-version = '2.0'
+
+def cmdVersion = gradle.startParameter.projectProperties.get('version')
+version = cmdVersion ?: '2.0'
 
 repositories {
     mavenCentral()
