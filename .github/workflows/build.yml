@@ -33,10 +33,12 @@ jobs:
         id: version
         run: |
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # Tag-triggered: use tag version (e.g. v1.0.0 → 1.0.0)
             TAG_VERSION="${GITHUB_REF#refs/tags/v}"
             echo "version=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
           else
-            VER=$(grep "cmdVersion ?:" build.gradle | grep -oE "[0-9]+.[0-9]+" | head -1)
+            # Branch push: extract from build.gradle
+            VER=$(grep "cmdVersion ?:" build.gradle | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" | head -1)
             echo "version=${VER}" >> "$GITHUB_OUTPUT"
           fi
 
@@ -54,8 +56,8 @@ jobs:
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
-          name: blazorpack-decode-${{ steps.version.outputs.version }}
-          path: blazorpack-decode/build/libs/blazorpack-decode-${{ steps.version.outputs.version }}.jar
+          name: BlazorSpy-${{ steps.version.outputs.version }}
+          path: blazorpack-decode/build/libs/BlazorSpy-${{ steps.version.outputs.version }}.jar
           if-no-files-found: error
           retention-days: 30
 
@@ -64,10 +66,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          JAR="blazorpack-decode/build/libs/blazorpack-decode-${{ steps.version.outputs.version }}.jar"
+          JAR="blazorpack-decode/build/libs/BlazorSpy-${{ steps.version.outputs.version }}.jar"
           TAG="${{ github.ref_name }}"
           gh release create "$TAG" \
-            --title "$TAG" \
+            --title "BlazorSpy $TAG" \
             --generate-notes \
             --verify-tag \
             "$JAR" \
