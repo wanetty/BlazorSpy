@@ -2,7 +2,7 @@
 
 **Burp Suite extension to inspect, decode, and tamper with Blazor Server WebSocket frames.**
 
-[![Version](https://img.shields.io/badge/version-2.1-blue)](https://github.com/Wanetty/BlazorSpy/releases)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/Wanetty/BlazorSpy/releases)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Burp](https://img.shields.io/badge/Burp-2023%2B-orange)](https://portswigger.net/burp)
 [![Java](https://img.shields.io/badge/Java-17%2B-red)](https://adoptium.net)
@@ -16,7 +16,7 @@ BlazorSpy lets you peer inside **BlazorPack frames** — the custom `varint32 + 
    cd blazorpack-decode
    ./gradlew jar
    ```
-2. **Load in Burp**: `Extender → Extensions → Add → Type: Java` → select `build/libs/blazorpack-decode-2.1.jar`
+2. **Load in Burp**: `Extender → Extensions → Add → Type: Java` → select `build/libs/BlazorSpy-1.0.0.jar`
 3. **Use**: Open a Blazor WebSocket or HTTP message → click the **BlazorPack** tab → edit JSON → Forward / Send (re-encoded automatically)
 
 ## What It Does

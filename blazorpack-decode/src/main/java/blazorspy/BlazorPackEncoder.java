@@ -1,4 +1,4 @@
-package blazorpack;
+package blazorspy;
 
 import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessageBufferPacker;

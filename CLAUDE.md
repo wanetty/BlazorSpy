@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Burp Suite extension that decodes/encodes Blazor Server WebSocket frames (BlazorPack = varint32 + MessagePack) into readable/editable JSON.
+**BlazorSpy** — Burp Suite extension that decodes/encodes Blazor Server WebSocket frames (BlazorPack = varint32 + MessagePack) into readable/editable JSON.
 
 Java (`blazorpack-decode/`) — Gradle project, Montoya API (`BurpExtension`). Works in Burp 2023+ with full HTTP + WebSocket message editor tabs.
 
@@ -19,13 +19,13 @@ cd blazorpack-decode
 ./gradlew jar
 ```
 
-Output: `build/libs/blazorpack-decode-2.0.jar` (fat JAR — includes msgpack-core + gson).
+Output: `build/libs/BlazorSpy-1.0.0.jar` (fat JAR — includes msgpack-core + gson).
 
 To deploy: load the `.jar` in Burp (Extender → Extensions → Add → Type: Java).
 
 ## Architecture
 
-8 source files under `blazorpack-decode/src/main/java/blazorpack/`:
+8 source files under `blazorpack-decode/src/main/java/blazorspy/`:
 
 - **`BlazorPack.java`** — Entry point. Implements `BurpExtension.initialize(MontoyaApi)`. Registers HTTP request/response editors + WebSocket message editor provider.
 - **`BlazorPackFrame.java`** — Static utilities: varint32 read/write, `isBlazorPackData()` detection heuristic, HTTP header stripping.

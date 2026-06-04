@@ -7,10 +7,10 @@ java {
     targetCompatibility = JavaVersion.VERSION_17
 }
 
-group = 'blazorpack'
+group = 'blazorspy'
 
 def cmdVersion = gradle.startParameter.projectProperties.get('version')
-version = cmdVersion ?: '2.1'
+version = cmdVersion ?: '1.0.0'
 
 repositories {
     mavenCentral()
@@ -37,9 +37,9 @@ test {
 
 // Fat JAR: bundles msgpack-core + gson so no external deps needed at runtime
 jar {
-    archiveBaseName = 'blazorpack-decode'
+    archiveBaseName = 'BlazorSpy'
     manifest {
-        attributes 'Implementation-Title': 'BlazorPack Decoder',
+        attributes 'Implementation-Title': 'BlazorSpy',
                    'Implementation-Version': archiveVersion
     }
     from {

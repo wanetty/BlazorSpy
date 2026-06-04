@@ -1,4 +1,4 @@
-package blazorpack;
+package blazorspy;
 
 import javax.swing.*;
 import java.awt.*;
@@ -44,7 +44,7 @@ public abstract class BlazorPackEditorBase {
         topBar.setLayout(new BoxLayout(topBar, BoxLayout.X_AXIS));
         topBar.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
 
-        statusLabel = new JLabel("BlazorPack / MessagePack decoder");
+        statusLabel = new JLabel("BlazorSpy — BlazorPack / MessagePack decoder");
         topBar.add(statusLabel);
         topBar.add(Box.createHorizontalGlue());
 
@@ -115,7 +115,7 @@ public abstract class BlazorPackEditorBase {
         if (hasTruncatedFrame) {
             return "⚠ Frame truncated — " + completeCount + " complete";
         }
-        return "BlazorPack ✓ (" + completeCount + " " + editorType
+        return "BlazorSpy ✓ (" + completeCount + " " + editorType
             + (completeCount != 1 ? "s" : "") + ")";
     }
 
