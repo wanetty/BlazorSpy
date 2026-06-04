@@ -10,7 +10,7 @@ java {
 group = 'blazorpack'
 
 def cmdVersion = gradle.startParameter.projectProperties.get('version')
-version = cmdVersion ?: '2.0'
+version = cmdVersion ?: '2.1'
 
 repositories {
     mavenCentral()

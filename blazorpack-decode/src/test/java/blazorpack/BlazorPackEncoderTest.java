@@ -188,4 +188,139 @@ class BlazorPackEncoderTest {
         // For non-SignalR methods, index 4 stays as a Map
         assertTrue(result.get(4) instanceof Map);
     }
+
+    // ---- Round-trip with embedded JSON expansion ----
+
+    @Test
+    void testRoundTripSignalRIndex4WithExpansion() throws Exception {
+        // Build a SignalR BeginInvokeDotNetFromJS frame with JSON args at index 4
+        List<Object> signalrFrame = new ArrayList<>();
+        signalrFrame.add(1L);
+        signalrFrame.add("BeginInvokeDotNetFromJS");
+        signalrFrame.add("cb123");
+        signalrFrame.add("dotNetMethod");
+        signalrFrame.add("{\"arg1\":42,\"arg2\":\"hello\"}");
+
+        // Encode to binary as a single-frame message
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        String json = gson.toJson(Collections.singletonList(signalrFrame));
+        byte[] originalBinary = BlazorPackEncoder.encode(json);
+
+        // Decode with expansion (simulating "Expand embedded JSON" checkbox ON)
+        BlazorPackDecoder.DecodeResult result =
+            BlazorPackDecoder.decodeWithBuffer(originalBinary, null);
+        assertFalse(result.hasTruncatedFrame);
+
+        String display = BlazorPackDecoder.prettyPrint(result.messages, true);
+
+        // Simulate stripComments() from BlazorPackEditorBase
+        String cleanJson = stripCommentLines(display);
+        byte[] reEncodedBinary = BlazorPackEncoder.encode(cleanJson);
+
+        // Decode the re-encoded binary and verify the critical property:
+        // the SignalR arg at index 4 must be a JSON string (not a Map/List),
+        // otherwise the server will reject the message and drop the connection.
+        BlazorPackDecoder.DecodeResult reResult =
+            BlazorPackDecoder.decodeWithBuffer(reEncodedBinary, null);
+        assertFalse(reResult.hasTruncatedFrame);
+        assertEquals(1, reResult.messages.size());
+
+        @SuppressWarnings("unchecked")
+        List<Object> reFrame = (List<Object>) reResult.messages.get(0);
+        assertEquals("BeginInvokeDotNetFromJS", reFrame.get(1),
+            "SignalR method name must be preserved");
+        assertTrue(reFrame.get(4) instanceof String,
+            "Index 4 arg must be a JSON string, not a Map — "
+            + "otherwise the server drops the WebSocket connection");
+        String argsJson = (String) reFrame.get(4);
+        assertTrue(argsJson.contains("\"arg1\""));
+        assertTrue(argsJson.contains("\"hello\""));
+    }
+
+    @Test
+    void testRoundTripNonSignalRWithExpansion() throws Exception {
+        // Non-SignalR message with JSON-looking string NOT at index 4.
+        // This is the exact bug case: expand shouldn't touch it, and round-trip must work.
+        List<Object> frame = new ArrayList<>();
+        frame.add(1L);
+        frame.add("MyHubMethod");
+        frame.add("target");
+        frame.add("{\"payload\":\"data\"}");  // index 3 — NOT expanded (not index 4)
+
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        String json = gson.toJson(Collections.singletonList(frame));
+        byte[] originalBinary = BlazorPackEncoder.encode(json);
+
+        // Decode with expansion
+        BlazorPackDecoder.DecodeResult result =
+            BlazorPackDecoder.decodeWithBuffer(originalBinary, null);
+        String display = BlazorPackDecoder.prettyPrint(result.messages, true);
+
+        // Re-encode
+        String cleanJson = stripCommentLines(display);
+        byte[] reEncodedBinary = BlazorPackEncoder.encode(cleanJson);
+
+        // Verify the string at index 3 is still a string (wasn't accidentally expanded)
+        BlazorPackDecoder.DecodeResult reResult =
+            BlazorPackDecoder.decodeWithBuffer(reEncodedBinary, null);
+        assertFalse(reResult.hasTruncatedFrame);
+        assertEquals(1, reResult.messages.size());
+
+        @SuppressWarnings("unchecked")
+        List<Object> reFrame = (List<Object>) reResult.messages.get(0);
+        assertTrue(reFrame.get(3) instanceof String,
+            "Non-SignalR index 3 must remain a string, not be expanded to a Map");
+        String payload = (String) reFrame.get(3);
+        assertTrue(payload.contains("\"payload\""));
+        assertTrue(payload.contains("\"data\""));
+    }
+
+    @Test
+    void testRoundTripWithoutExpansion() throws Exception {
+        // Decode WITHOUT expansion — round-trip should always work
+        List<Object> signalrFrame = new ArrayList<>();
+        signalrFrame.add(1L);
+        signalrFrame.add("BeginInvokeDotNetFromJS");
+        signalrFrame.add("cb123");
+        signalrFrame.add("dotNetMethod");
+        signalrFrame.add("{\"arg1\":42,\"arg2\":\"hello\"}");
+
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        String json = gson.toJson(Collections.singletonList(signalrFrame));
+        byte[] originalBinary = BlazorPackEncoder.encode(json);
+
+        BlazorPackDecoder.DecodeResult result =
+            BlazorPackDecoder.decodeWithBuffer(originalBinary, null);
+        String display = BlazorPackDecoder.prettyPrint(result.messages, false);
+
+        String cleanJson = stripCommentLines(display);
+        byte[] reEncodedBinary = BlazorPackEncoder.encode(cleanJson);
+
+        // Verify the message structure is intact
+        BlazorPackDecoder.DecodeResult reResult =
+            BlazorPackDecoder.decodeWithBuffer(reEncodedBinary, null);
+        assertFalse(reResult.hasTruncatedFrame);
+        assertEquals(1, reResult.messages.size());
+
+        @SuppressWarnings("unchecked")
+        List<Object> reFrame = (List<Object>) reResult.messages.get(0);
+        assertEquals("BeginInvokeDotNetFromJS", reFrame.get(1));
+        // Without expansion, index 4 should still be a string
+        assertTrue(reFrame.get(4) instanceof String,
+            "Index 4 should remain a string when expand is OFF");
+    }
+
+    /**
+     * Strips comment lines (starting with //) from text, matching the logic
+     * in BlazorPackEditorBase.stripComments().
+     */
+    private static String stripCommentLines(String text) {
+        StringBuilder sb = new StringBuilder();
+        for (String line : text.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("//")) continue;
+            sb.append(line).append("\n");
+        }
+        return sb.toString().trim();
+    }
 }

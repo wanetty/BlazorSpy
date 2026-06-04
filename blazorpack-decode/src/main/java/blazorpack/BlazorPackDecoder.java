@@ -27,6 +27,12 @@ public class BlazorPackDecoder {
     /** Maximum number of elements in a MessagePack array or map to prevent OOM. */
     private static final int MAX_CONTAINER_SIZE = 100_000;
 
+    /** SignalR methods whose index-4 argument is a JSON string
+     *  (same set as in BlazorPackEncoder, must stay in sync). */
+    private static final Set<String> SIGNALR_JSON_ARG_METHODS = new HashSet<>(Arrays.asList(
+        "BeginInvokeDotNetFromJS", "DispatchEventAsync", "EndInvokeJSFromDotNet"
+    ));
+
     private BlazorPackDecoder() {} // static utility
 
     // ---- DecodeResult ----
@@ -384,30 +390,53 @@ public class BlazorPackDecoder {
     }
 
     /**
-     * Recursively expands string fields that look like JSON into actual objects.
+     * Recursively expands embedded JSON strings into actual objects,
+     * ONLY at positions where the encoder's collapseEmbeddedJson will
+     * reverse the expansion (index 4 of known SignalR JS-invoke methods).
+     * This ensures perfect expand/collapse symmetry and prevents
+     * WebSocket disconnection due to structurally mismatched re-encoding.
      */
     @SuppressWarnings("unchecked")
     private static Object expandEmbeddedJson(Object obj) {
+        return expand(obj, false, -1);
+    }
+
+    private static Object expand(Object obj, boolean parentIsSignalR, int fieldIndex) {
         if (obj instanceof String) {
-            String s = ((String) obj).trim();
-            if (s.startsWith("{") || s.startsWith("[")) {
-                try {
-                    return GSON.fromJson(s, Object.class);
-                } catch (Exception ignored) { }
+            // Only expand at index 4 of a SignalR invocation frame.
+            // This matches collapseEmbeddedJson's collapse logic exactly.
+            if (parentIsSignalR && fieldIndex == 4) {
+                String s = ((String) obj).trim();
+                if (s.startsWith("{") || s.startsWith("[")) {
+                    try {
+                        return GSON.fromJson(s, Object.class);
+                    } catch (Exception ignored) {
+                        // Not valid JSON — leave as string
+                    }
+                }
             }
             return obj;
         }
         if (obj instanceof List) {
-            List<Object> result = new ArrayList<>();
-            for (Object item : (List<Object>) obj) {
-                result.add(expandEmbeddedJson(item));
+            List<Object> list = (List<Object>) obj;
+            // SignalR detection: same logic as collapseEmbeddedJson in the encoder
+            boolean isSignalR = list.size() >= 3
+                && list.get(1) instanceof String
+                && SIGNALR_JSON_ARG_METHODS.contains(list.get(1));
+
+            List<Object> result = new ArrayList<>(list.size());
+            for (int i = 0; i < list.size(); i++) {
+                result.add(expand(list.get(i), isSignalR, i));
             }
             return result;
         }
         if (obj instanceof Map) {
-            Map<String, Object> result = new LinkedHashMap<>();
-            for (Map.Entry<String, Object> entry : ((Map<String, Object>) obj).entrySet()) {
-                result.put(entry.getKey(), expandEmbeddedJson(entry.getValue()));
+            Map<String, Object> map = (Map<String, Object>) obj;
+            Map<String, Object> result = new LinkedHashMap<>(map.size());
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                // Maps propagate parentIsSignalR and use fieldIndex=-1,
+                // matching collapseEmbeddedJson's Map handling.
+                result.put(entry.getKey(), expand(entry.getValue(), parentIsSignalR, -1));
             }
             return result;
         }
