@@ -16,7 +16,7 @@ BlazorSpy lets you peer inside **BlazorPack frames** — the custom `varint32 + 
    cd blazorpack-decode
    ./gradlew jar
    ```
-2. **Load in Burp**: `Extender → Extensions → Add → Type: Java` → select `build/libs/blazorpack-decode-2.1.jar`
+2. **Load in Burp**: `Extender → Extensions → Add → Type: Java` → select `build/libs/BlazorSpy-1.0.0.jar`
 3. **Use**: Open a Blazor WebSocket or HTTP message → click the **BlazorPack** tab → edit JSON → Forward / Send (re-encoded automatically)
 
 ## What It Does

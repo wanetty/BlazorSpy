@@ -1,4 +1,4 @@
-package blazorpack;
+package blazorspy;
 
 import burp.api.montoya.ui.editor.extension.*;
 

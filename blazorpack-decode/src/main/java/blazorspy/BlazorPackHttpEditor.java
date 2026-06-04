@@ -1,4 +1,4 @@
-package blazorpack;
+package blazorspy;
 
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.message.HttpRequestResponse;

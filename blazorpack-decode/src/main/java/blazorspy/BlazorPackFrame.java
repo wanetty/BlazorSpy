@@ -1,4 +1,4 @@
-package blazorpack;
+package blazorspy;
 
 /**
  * Low-level BlazorPack / SignalR framing utilities.
