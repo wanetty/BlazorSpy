@@ -10,7 +10,7 @@ java {
 group = 'blazorspy'
 
 def cmdVersion = gradle.startParameter.projectProperties.get('version')
-version = cmdVersion ?: '1.0.0'
+version = cmdVersion ?: '1.0.1'
 
 repositories {
     mavenCentral()
