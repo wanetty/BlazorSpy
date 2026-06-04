@@ -10,20 +10,40 @@ public class BlazorPackFrame {
 
     // ---- Varint32 ----
 
+    /** Maximum bytes a valid varint32 can occupy. */
+    private static final int VARINT_MAX_BYTES = 5;
+
     /**
      * Reads a varint32 from the byte array starting at pos.
      * Returns the decoded integer value. Advances pos[0] past the varint.
+     *
+     * @throws IllegalArgumentException if varint is truncated, exceeds 5 bytes,
+     *         or overflows 32 bits (corrupt data).
      */
     public static int readVarint(byte[] data, int[] pos) {
         int result = 0;
         int shift = 0;
         int p = pos[0];
+        int bytesRead = 0;
 
         while (p < data.length) {
+            bytesRead++;
+            if (bytesRead > VARINT_MAX_BYTES) {
+                throw new IllegalArgumentException(
+                    "Varint exceeds " + VARINT_MAX_BYTES + " bytes — corrupt or invalid data");
+            }
+
             int b = data[p] & 0xFF;
             p++;
+
+            // Overflow protection: if shift >= 32, the value won't fit in a signed 32-bit int
+            if (shift >= 32) {
+                throw new IllegalArgumentException("Varint overflow — value exceeds 32-bit range");
+            }
+
             result |= (b & 0x7F) << shift;
             shift += 7;
+
             if ((b & 0x80) == 0) {
                 pos[0] = p;
                 return result;
@@ -72,7 +92,7 @@ public class BlazorPackFrame {
     public static boolean isBlazorPackData(byte[] data) {
         if (data == null || data.length < 2) return false;
 
-        byte[] sample = data.length > 128 ? java.util.Arrays.copyOf(data, 128) : data;
+        byte[] sample = data.length > 512 ? java.util.Arrays.copyOf(data, 512) : data;
 
         // JSON literal?
         if (isJsonStart(sample)) return true;
@@ -110,6 +130,37 @@ public class BlazorPackFrame {
         // fixmap: 0x80-0x8F, fixarray: 0x90-0x9F
         // array16: 0xDC, array32: 0xDD, map16: 0xDE, map32: 0xDF
         return (b >= 0x80 && b <= 0x9F) || b == 0xDC || b == 0xDD || b == 0xDE || b == 0xDF;
+    }
+
+    /**
+     * Checks whether the last BlazorPack frame in the data is truncated
+     * (the varint-declared length extends beyond the available bytes).
+     *
+     * Walks through all complete frames; if the final frame's message
+     * length exceeds the remaining data, returns true.
+     *
+     * @return true if the buffer ends with an incomplete frame
+     */
+    public static boolean isTruncatedFrame(byte[] data) {
+        if (data == null || data.length < 2) return false;
+        int[] pos = {0};
+
+        try {
+            while (pos[0] < data.length) {
+                int start = pos[0];
+                int msgLen = readVarint(data, pos);
+                if (pos[0] + msgLen > data.length) {
+                    // Last frame extends beyond available data
+                    return true;
+                }
+                pos[0] += msgLen;
+                if (pos[0] == start) break; // stuck
+            }
+        } catch (Exception e) {
+            // Varint parse error at end of buffer — consider it truncated
+            return true;
+        }
+        return false;
     }
 
     // ---- HTTP header detection ----

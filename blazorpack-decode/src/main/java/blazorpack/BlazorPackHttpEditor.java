@@ -20,53 +20,15 @@ import java.util.List;
  *
  * Preserves original HTTP headers and only decodes/encodes the body.
  */
-public class BlazorPackHttpEditor implements ExtensionProvidedHttpRequestEditor,
-                                             ExtensionProvidedHttpResponseEditor {
-
-    private final JPanel panel;
-    private final JTextArea textArea;
-    private final JLabel statusLabel;
-    private final JLabel infoLabel;
-    private final JCheckBox expandCb;
+public class BlazorPackHttpEditor extends BlazorPackEditorBase
+        implements ExtensionProvidedHttpRequestEditor,
+                   ExtensionProvidedHttpResponseEditor {
 
     private byte[] originalBody = new byte[0];
     private byte[] originalFull = new byte[0];
-    private String originalDecoded = "";
-    private boolean lastDecodeOk = false;
 
     public BlazorPackHttpEditor() {
-        panel = new JPanel(new BorderLayout());
-
-        JPanel topBar = new JPanel();
-        topBar.setLayout(new BoxLayout(topBar, BoxLayout.X_AXIS));
-        topBar.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
-
-        statusLabel = new JLabel("BlazorPack / MessagePack decoder");
-        topBar.add(statusLabel);
-        topBar.add(Box.createHorizontalGlue());
-
-        expandCb = new JCheckBox("Expandir JSON embebido", true);
-        topBar.add(expandCb);
-
-        panel.add(topBar, BorderLayout.NORTH);
-
-        textArea = new JTextArea();
-        textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        textArea.setEditable(true);
-        textArea.setLineWrap(false);
-        textArea.setTabSize(2);
-
-        panel.add(new JScrollPane(textArea), BorderLayout.CENTER);
-
-        JPanel bottomBar = new JPanel();
-        bottomBar.setLayout(new BoxLayout(bottomBar, BoxLayout.X_AXIS));
-        bottomBar.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
-
-        infoLabel = new JLabel("");
-        infoLabel.setFont(new Font("Dialog", Font.PLAIN, 11));
-        bottomBar.add(infoLabel);
-
-        panel.add(bottomBar, BorderLayout.SOUTH);
+        buildUI();
     }
 
     @Override
@@ -92,9 +54,12 @@ public class BlazorPackHttpEditor implements ExtensionProvidedHttpRequestEditor,
 
     @Override
     public void setRequestResponse(HttpRequestResponse requestResponse) {
+        truncatedRaw = new byte[0];
+        lastHadTruncated = false;
+
         if (requestResponse == null) {
             textArea.setText("");
-            setStatus("Sin contenido");
+            setStatus("No content");
             originalBody = new byte[0];
             lastDecodeOk = false;
             return;
@@ -109,32 +74,43 @@ public class BlazorPackHttpEditor implements ExtensionProvidedHttpRequestEditor,
 
             originalBody = extractBody(fullMsg);
 
-            List<Object> messages = BlazorPackDecoder.decode(originalBody);
-            lastDecodeOk = true;
+            // Decode with buffer support for truncated frame detection
+            BlazorPackDecoder.DecodeResult result =
+                BlazorPackDecoder.decodeWithBuffer(originalBody, null);
+            List<Object> messages = result.messages;
 
-            String display = BlazorPackDecoder.prettyPrint(messages, expandCb.isSelected());
+            lastDecodeOk = true;
+            lastHadTruncated = result.hasTruncatedFrame;
+            if (result.hasTruncatedFrame && result.remainder.length > 0) {
+                truncatedRaw = result.remainder;
+            }
+
+            // Choose display format
+            String display;
+            if (result.hasTruncatedFrame) {
+                display = BlazorPackDecoder.prettyPrintWithAnnotations(messages, true);
+            } else {
+                display = BlazorPackDecoder.prettyPrint(messages, expandCb.isSelected());
+            }
+
             originalDecoded = display;
             textArea.setText(display);
             textArea.setCaretPosition(0);
 
-            int count = messages.size();
-            setStatus("BlazorPack ✓ (" + count + " mensaje" + (count != 1 ? "s" : "") + ")", true);
+            int completeCount = countCompleteFrames(messages);
+            setStatus(formatStatusMessage(completeCount, result.hasTruncatedFrame, "message"),
+                true, result.hasTruncatedFrame);
             setInfo(originalBody.length + " bytes -> " + display.length() + " chars JSON");
 
         } catch (Exception e) {
             lastDecodeOk = false;
+            lastHadTruncated = false;
             StringWriter sw = new StringWriter();
             e.printStackTrace(new PrintWriter(sw));
-            textArea.setText("// ERROR DE DECODIFICACION\n// " + e.getMessage() + "\n// Stack trace:\n" + sw);
-            setStatus("Error: " + e.getMessage(), false);
+            textArea.setText("// DECODING ERROR\n// " + e.getMessage() + "\n// Stack trace:\n" + sw);
+            setStatus("Error: " + e.getMessage(), false, false);
             setInfo("");
         }
-    }
-
-    @Override
-    public boolean isModified() {
-        if (!lastDecodeOk) return false;
-        return !textArea.getText().trim().equals(originalDecoded.trim());
     }
 
     @Override
@@ -148,12 +124,12 @@ public class BlazorPackHttpEditor implements ExtensionProvidedHttpRequestEditor,
             return HttpRequest.httpRequest(ByteArray.byteArray(originalFull));
         }
         try {
-            byte[] reBody = BlazorPackEncoder.encode(textArea.getText());
+            byte[] reBody = buildReEncodedBody();
             byte[] rebuilt = rebuildHttp(originalFull, reBody);
-            setStatus("Re-encodificado ✓ (" + reBody.length + " bytes)", true);
+            setStatus("Re-encoded ✓ (" + reBody.length + " bytes)", true, false);
             return HttpRequest.httpRequest(ByteArray.byteArray(rebuilt));
         } catch (Exception e) {
-            setStatus("Error: " + e.getMessage(), false);
+            setStatus("Error: " + e.getMessage(), false, false);
             return HttpRequest.httpRequest(ByteArray.byteArray(originalFull));
         }
     }
@@ -166,12 +142,12 @@ public class BlazorPackHttpEditor implements ExtensionProvidedHttpRequestEditor,
             return HttpResponse.httpResponse(ByteArray.byteArray(originalFull));
         }
         try {
-            byte[] reBody = BlazorPackEncoder.encode(textArea.getText());
+            byte[] reBody = buildReEncodedBody();
             byte[] rebuilt = rebuildHttp(originalFull, reBody);
-            setStatus("Re-encodificado ✓ (" + reBody.length + " bytes)", true);
+            setStatus("Re-encoded ✓ (" + reBody.length + " bytes)", true, false);
             return HttpResponse.httpResponse(ByteArray.byteArray(rebuilt));
         } catch (Exception e) {
-            setStatus("Error: " + e.getMessage(), false);
+            setStatus("Error: " + e.getMessage(), false, false);
             return HttpResponse.httpResponse(ByteArray.byteArray(originalFull));
         }
     }
@@ -179,19 +155,36 @@ public class BlazorPackHttpEditor implements ExtensionProvidedHttpRequestEditor,
     // ---- Helpers ----
 
     private byte[] extractBody(String fullMessage) {
-        int offset = BlazorPackFrame.findHttpBodyOffset(fullMessage.getBytes(StandardCharsets.ISO_8859_1));
+        byte[] fullBytes = fullMessage.getBytes(StandardCharsets.ISO_8859_1);
+        int offset = BlazorPackFrame.findHttpBodyOffset(fullBytes);
         if (offset > 0) {
-            return Arrays.copyOfRange(fullMessage.getBytes(StandardCharsets.ISO_8859_1), offset, fullMessage.length());
+            return Arrays.copyOfRange(fullBytes, offset, fullBytes.length);
         }
-        return fullMessage.getBytes(StandardCharsets.ISO_8859_1);
+        return fullBytes;
+    }
+
+    /**
+     * Builds the re-encoded body from the edited text, stripping comments
+     * and appending preserved truncated raw bytes.
+     */
+    private byte[] buildReEncodedBody() throws Exception {
+        String edited = textArea.getText();
+        String cleanJson = stripComments(edited);
+        byte[] reEncoded = BlazorPackEncoder.encode(cleanJson);
+
+        if (truncatedRaw.length > 0) {
+            byte[] output = new byte[reEncoded.length + truncatedRaw.length];
+            System.arraycopy(reEncoded, 0, output, 0, reEncoded.length);
+            System.arraycopy(truncatedRaw, 0, output, reEncoded.length, truncatedRaw.length);
+            return output;
+        }
+        return reEncoded;
     }
 
     private byte[] rebuildHttp(byte[] original, byte[] newBody) {
-        // Find body offset in original
         int bodyOffset = BlazorPackFrame.findHttpBodyOffset(original);
         if (bodyOffset <= 0) return newBody;
 
-        // Build header part, updating Content-Length
         String headerPart = new String(original, 0, bodyOffset, StandardCharsets.ISO_8859_1);
         headerPart = headerPart.replaceAll("(?i)(Content-Length:\\s*)\\d+", "$1" + newBody.length);
 
@@ -200,19 +193,5 @@ public class BlazorPackHttpEditor implements ExtensionProvidedHttpRequestEditor,
         System.arraycopy(newHeaders, 0, result, 0, newHeaders.length);
         System.arraycopy(newBody, 0, result, newHeaders.length, newBody.length);
         return result;
-    }
-
-    private void setStatus(String text, boolean ok) {
-        statusLabel.setForeground(ok ? new Color(0, 120, 0) : new Color(180, 0, 0));
-        statusLabel.setText(text);
-    }
-
-    private void setStatus(String text) {
-        statusLabel.setForeground(Color.BLACK);
-        statusLabel.setText(text);
-    }
-
-    private void setInfo(String text) {
-        infoLabel.setText(text);
     }
 }

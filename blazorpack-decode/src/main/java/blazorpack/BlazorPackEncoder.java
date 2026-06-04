@@ -42,8 +42,7 @@ public class BlazorPackEncoder {
         // Normalize to list of messages
         List<Object> messages;
         if (parsed instanceof Map) {
-            messages = Collections.singletonList(new Object[]{parsed}); // single SignalR frame?
-            // Actually, a single dict might be a single message — wrap it
+            // A single dict is a single message — wrap it
             messages = Collections.singletonList(Collections.singletonList(parsed));
         } else if (parsed instanceof List) {
             @SuppressWarnings("unchecked")

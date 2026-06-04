@@ -6,7 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Burp Suite extension that decodes/encodes Blazor Server WebSocket frames (BlazorPack = varint32 + MessagePack) into readable/editable JSON.
 
-Java (`blazorpack-decode/`, v2.0) — Gradle project, Montoya API (`BurpExtension`). Works in Burp 2023+ with full HTTP + WebSocket message editor tabs.
+Java (`blazorpack-decode/`) — Gradle project, Montoya API (`BurpExtension`). Works in Burp 2023+ with full HTTP + WebSocket message editor tabs.
+
+## Versioning
+
+Follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Increment PATCH for bugfixes, MINOR for new features, MAJOR for breaking changes. Update `version` in `build.gradle` accordingly — do NOT leave it frozen.
 
 ## Build & Deploy
 
