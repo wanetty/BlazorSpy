@@ -2,7 +2,7 @@
 
 **Burp Suite extension to inspect, decode, and tamper with Blazor Server WebSocket frames.**
 
-[![Version](https://img.shields.io/badge/version-1.0.1-blue)](https://github.com/Wanetty/BlazorSpy/releases)
+[![Version](https://img.shields.io/badge/version-1.0.2-blue)](https://github.com/Wanetty/BlazorSpy/releases)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Burp](https://img.shields.io/badge/Burp-2023%2B-orange)](https://portswigger.net/burp)
 [![Java](https://img.shields.io/badge/Java-17%2B-red)](https://adoptium.net)

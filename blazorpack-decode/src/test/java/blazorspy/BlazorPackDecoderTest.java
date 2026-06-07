@@ -202,91 +202,121 @@ class BlazorPackDecoderTest {
 
     @Test
     void testExpandEmbeddedJsonSignalRArgs() {
-        // SignalR BeginInvokeDotNetFromJS: index 4 contains JSON args string
-        List<Object> signalrFrame = new ArrayList<>();
-        signalrFrame.add(1L);                              // type
-        signalrFrame.add("BeginInvokeDotNetFromJS");        // method (index 1)
-        signalrFrame.add("callbackId");                     // target
-        signalrFrame.add("dotNetMethod");                   // method name
-        signalrFrame.add("{\"arg1\":\"value1\",\"arg2\":42}"); // index 4 — JSON args
+        // Real nested BeginInvokeDotNetFromJS: JSON arg at args[4]
+        List<Object> outerFrame = new ArrayList<>();
+        outerFrame.add(1L);
+        outerFrame.add(new LinkedHashMap<>());               // [1] Headers
+        outerFrame.add(null);                                // [2] InvocationId
+        outerFrame.add("BeginInvokeDotNetFromJS");           // [3] Target
+
+        List<Object> args = new ArrayList<>();
+        args.add("callbackId");
+        args.add("asyncHandle");
+        args.add("DispatchEventAsync");
+        args.add(1);
+        args.add("{\"arg1\":\"value1\",\"arg2\":42}");       // args[4] — JSON arg
+        outerFrame.add(args);                                // [4] Arguments
 
         String output = BlazorPackDecoder.prettyPrint(
-            Collections.singletonList(signalrFrame), true);
+            Collections.singletonList(outerFrame), true);
 
-        // Should have expanded the JSON string at index 4
-        assertTrue(output.contains("\"arg1\""));
+        // Should have expanded the JSON string at args[4]
+        assertTrue(output.contains("\"arg1\""), "arg1 key should be expanded");
         assertTrue(output.contains("\"value1\""));
         assertTrue(output.contains("\"arg2\""));
         assertTrue(output.contains("42"));
-        // The JSON string should appear as unquoted object, not escaped
-        assertFalse(output.contains("{\\\"arg1\\\""));
+        assertFalse(output.contains("{\\\"arg1\\\""), "Should not be JSON-escaped");
     }
 
     @Test
     void testExpandEmbeddedJsonNonSignalRMethod() {
-        // A non-SignalR method with JSON-looking string at index 4
-        List<Object> frame = new ArrayList<>();
-        frame.add(1L);
-        frame.add("MyCustomMethod");  // NOT in SIGNALR_JSON_ARG_METHODS
-        frame.add("target");
-        frame.add(0L);
-        frame.add("{\"should\":\"not be expanded\"}");
+        // Non-SignalR method: no expansion should occur
+        List<Object> outerFrame = new ArrayList<>();
+        outerFrame.add(1L);
+        outerFrame.add(new LinkedHashMap<>());
+        outerFrame.add(null);
+        outerFrame.add("MyCustomMethod");  // NOT in SIGNALR_JSON_ARG_METHODS
+
+        List<Object> args = new ArrayList<>();
+        args.add("{\"should\":\"not be expanded\"}");
+        outerFrame.add(args);
 
         String output = BlazorPackDecoder.prettyPrint(
-            Collections.singletonList(frame), true);
+            Collections.singletonList(outerFrame), true);
 
         // Should NOT expand — encoder won't collapse it back
-        assertFalse(output.contains("\"should\""));
+        assertFalse(output.contains("\"should\""),
+            "Non-SignalR method: should not expand embedded JSON");
         assertTrue(output.contains("{\\\"should\\\""));
     }
 
     @Test
-    void testExpandEmbeddedJsonNonIndex4() {
-        // Even for SignalR methods, only index 4 should be expanded
-        List<Object> frame = new ArrayList<>();
-        frame.add(1L);
-        frame.add("BeginInvokeDotNetFromJS");
-        frame.add("{\"fake\":\"target\"}");  // index 2 — NOT index 4
-        frame.add("methodName");
-        frame.add("{\"real\":\"args\"}");     // index 4 — should be expanded
+    void testExpandEmbeddedJsonOnlySignalRArgIndex() {
+        // For BeginInvokeDotNetFromJS, only args[4] should be expanded.
+        // args[0], args[1], args[2], args[3] should remain strings even if JSON-looking.
+        List<Object> outerFrame = new ArrayList<>();
+        outerFrame.add(1L);
+        outerFrame.add(new LinkedHashMap<>());
+        outerFrame.add(null);
+        outerFrame.add("BeginInvokeDotNetFromJS");
+
+        List<Object> args = new ArrayList<>();
+        args.add("[\"fake-json-at-index-0\"]");  // args[0] — JSON-looking, should NOT expand
+        args.add("null");                          // args[1]
+        args.add("DispatchEventAsync");            // args[2]
+        args.add(1);                               // args[3]
+        args.add("{\"real\":\"args\"}");           // args[4] — should expand
+        outerFrame.add(args);
 
         String output = BlazorPackDecoder.prettyPrint(
-            Collections.singletonList(frame), true);
+            Collections.singletonList(outerFrame), true);
 
-        // Index 2 should NOT be expanded (not index 4)
-        assertTrue(output.contains("{\\\"fake\\\""));
-        assertFalse(output.contains("\"fake\""));
-        // Index 4 should be expanded
-        assertTrue(output.contains("\"real\""));
+        // args[0] should NOT be expanded (not at the SignalR-specific index)
+        assertTrue(output.contains("\\\"fake-json-at-index-0\\\""),
+            "args[0] should remain as JSON-escaped string");
+        // args[4] should be expanded
+        assertTrue(output.contains("\"real\""),
+            "args[4] should be expanded");
         assertTrue(output.contains("\"args\""));
     }
 
     @Test
     void testExpandEmbeddedJsonDispatchEventAsync() {
-        List<Object> frame = new ArrayList<>();
-        frame.add(1L);
-        frame.add("DispatchEventAsync");
-        frame.add("target");
-        frame.add("eventName");
-        frame.add("{\"eventArgs\":\"data\"}");
+        // DispatchEventAsync: JSON arg at args[1]
+        List<Object> outerFrame = new ArrayList<>();
+        outerFrame.add(1L);
+        outerFrame.add(new LinkedHashMap<>());
+        outerFrame.add(null);
+        outerFrame.add("DispatchEventAsync");
+
+        List<Object> args = new ArrayList<>();
+        args.add("targetElementId");
+        args.add("{\"eventArgs\":\"data\"}");   // args[1] — JSON arg
+        outerFrame.add(args);
 
         String output = BlazorPackDecoder.prettyPrint(
-            Collections.singletonList(frame), true);
-        assertTrue(output.contains("\"eventArgs\""));
+            Collections.singletonList(outerFrame), true);
+        assertTrue(output.contains("\"eventArgs\""), "DispatchEventAsync args[1] should expand");
         assertTrue(output.contains("\"data\""));
     }
 
     @Test
     void testExpandEmbeddedJsonEndInvokeJSFromDotNet() {
-        List<Object> frame = new ArrayList<>();
-        frame.add(1L);
-        frame.add("EndInvokeJSFromDotNet");
-        frame.add("callbackId");
-        frame.add(0L);
-        frame.add("{\"result\":\"success\"}");
+        // EndInvokeJSFromDotNet: JSON arg at args[2]
+        List<Object> outerFrame = new ArrayList<>();
+        outerFrame.add(1L);
+        outerFrame.add(new LinkedHashMap<>());
+        outerFrame.add("callbackId");
+        outerFrame.add("EndInvokeJSFromDotNet");
+
+        List<Object> args = new ArrayList<>();
+        args.add(3);
+        args.add(true);
+        args.add("{\"result\":\"success\"}");  // args[2] — JSON arg
+        outerFrame.add(args);
 
         String output = BlazorPackDecoder.prettyPrint(
-            Collections.singletonList(frame), true);
+            Collections.singletonList(outerFrame), true);
         assertTrue(output.contains("\"result\""));
         assertTrue(output.contains("\"success\""));
     }

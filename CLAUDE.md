@@ -44,24 +44,30 @@ To deploy: load the `.jar` in Burp (Extender → Extensions → Add → Type: Ja
 
 ## Architecture
 
-8 source files under `blazorpack-decode/src/main/java/blazorspy/`:
+- **Main Entry Point**: `src/main/java/Extension.java` - implements `BurpExtension` interface
+- **Build System**: Gradle with Kotlin DSL, Java 21 compatibility
+- **Dependencies**: Montoya API 2025.5 (compile-only), no runtime dependencies
+- **Extension Pattern**: Single-class extension that initializes through `initialize(MontoyaApi montoyaApi)` method
 
-- **`BlazorPack.java`** — Entry point. Implements `BurpExtension.initialize(MontoyaApi)`. Registers HTTP request/response editors + WebSocket message editor provider.
-- **`BlazorPackFrame.java`** — Static utilities: varint32 read/write, `isBlazorPackData()` detection heuristic, HTTP header stripping.
-- **`BlazorPackDecoder.java`** — `decode(byte[])` → `List<Object>`. Uses `msgpack-core` `MessageUnpacker`. Handles varint framing loop, JSON fallback, binary-to-string conversion. `prettyPrint()` formats decoded messages as indented JSON with optional embedded JSON expansion.
-- **`BlazorPackEncoder.java`** — `encode(String json)` → `byte[]`. Parses with Gson, packs with `MessageBufferPacker` using binary type headers (`packBinaryHeader`), prepends varint framing. `collapseEmbeddedJson()` reverses JSON expansion, preserving SignalR method argument boundaries.
-- **`BlazorPackHttpEditor.java`** + **`BlazorPackHttpEditorProvider.java`** — Montoya HTTP request/response editor tabs. Swing UI: JTextArea + "Expandir JSON embebido" checkbox + status bar. Strips/reinjects HTTP headers, updates Content-Length on re-encode.
-- **`BlazorPackWsEditor.java`** + **`BlazorPackWsEditorProvider.java`** — Montoya WebSocket editor tabs. Same UI pattern. `setMessage(WebSocketMessage)` extracts bytes via `message.payload().getBytes()`. Implements `isEnabledFor()` detection.
+## Key Development Commands
 
-### Dependencies (baked into fat JAR)
+```bash
+./gradlew build    # Build and test the extension
+./gradlew jar      # Create the extension JAR file
+./gradlew clean    # Clean build artifacts
+```
 
-- `org.msgpack:msgpack-core:0.9.8` — MessagePack serialization
-- `com.google.code.gson:gson:2.10.1` — JSON parsing/formatting
-- `net.portswigger.burp.extensions:montoya-api:2024.7` (compileOnly — provided by Burp at runtime)
+The built JAR file will be in `build/libs/` and can be loaded directly into Burp Suite.
 
-## Key protocol details
+## Extension Loading in Burp
 
-- **BlazorPack framing**: `[varint32 message_length][MessagePack payload]...` repeating
-- **MessagePack uses binary type** (0xc4–0xc6) for strings: `packBinaryHeader()` + `writePayload()`, matching Blazor's `use_bin_type=True`
-- **SignalR-specific**: methods like `BeginInvokeDotNetFromJS` have JSON-stringified args at specific positions (index 4). The collapse/expand logic preserves these boundaries for valid re-encoding.
-- **Pure JSON frames** (starting with `{` or `[`) are passed through as-is.
+1. Build the JAR using `./gradlew jar`
+2. In Burp: Extensions > Installed > Add > Select the JAR file
+3. For quick reloading during development: Ctrl/⌘ + click the Loaded checkbox
+
+## Documentation Structure
+
+- See @docs/bapp-store-requirements.md for BApp Store submission requirements
+- See @docs/montoya-api-examples.md for code patterns and extension structure  
+- See @docs/development-best-practices.md for development guidelines
+- See @docs/resources.md for external documentation and links

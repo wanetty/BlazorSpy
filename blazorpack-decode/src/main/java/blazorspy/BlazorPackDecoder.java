@@ -104,7 +104,8 @@ public class BlazorPackDecoder {
         // JSON literal?
         if (BlazorPackFrame.isJsonStart(body)) {
             try {
-                String text = new String(body, StandardCharsets.UTF_8).replaceFirst("[\n\r]+$", "");
+                // Strip trailing spaces, newlines, and record separators (0x1e)
+                String text = new String(body, StandardCharsets.UTF_8).replaceAll("[ \n\r\u001e]+$", "");
                 Object parsed = GSON.fromJson(text, Object.class);
                 return new DecodeResult(Collections.singletonList(parsed), new byte[0], false);
             } catch (Exception e) {
@@ -398,49 +399,82 @@ public class BlazorPackDecoder {
      */
     @SuppressWarnings("unchecked")
     private static Object expandEmbeddedJson(Object obj) {
-        return expand(obj, false, -1);
-    }
-
-    private static Object expand(Object obj, boolean parentIsSignalR, int fieldIndex) {
-        if (obj instanceof String) {
-            // Only expand at index 4 of a SignalR invocation frame.
-            // This matches collapseEmbeddedJson's collapse logic exactly.
-            if (parentIsSignalR && fieldIndex == 4) {
-                String s = ((String) obj).trim();
-                if (s.startsWith("{") || s.startsWith("[")) {
-                    try {
-                        return GSON.fromJson(s, Object.class);
-                    } catch (Exception ignored) {
-                        // Not valid JSON — leave as string
+        if (obj instanceof List) {
+            List<Object> list = new ArrayList<>((List<Object>) obj);
+            
+            // 1. Check for real nested SignalR invocation frame:
+            // [1, Headers, InvocationId, Target (String), Arguments (List)]
+            if (list.size() >= 5
+                    && list.get(0) instanceof Number
+                    && (((Number) list.get(0)).longValue() == 1 || ((Number) list.get(0)).longValue() == 4)
+                    && list.get(3) instanceof String
+                    && list.get(4) instanceof List) {
+                
+                String target = (String) list.get(3);
+                if (SIGNALR_JSON_ARG_METHODS.contains(target)) {
+                    List<Object> args = new ArrayList<>((List<Object>) list.get(4));
+                    int targetIndex = -1;
+                    if ("BeginInvokeDotNetFromJS".equals(target)) {
+                        targetIndex = 4;
+                    } else if ("EndInvokeJSFromDotNet".equals(target)) {
+                        targetIndex = 2;
+                    } else if ("DispatchEventAsync".equals(target)) {
+                        targetIndex = 1;
                     }
+                    
+                    if (targetIndex >= 0 && args.size() > targetIndex) {
+                        Object arg = args.get(targetIndex);
+                        if (arg instanceof String) {
+                            args.set(targetIndex, tryParseJson((String) arg));
+                        }
+                    }
+                    list.set(4, args);
+                    return list;
                 }
             }
-            return obj;
-        }
-        if (obj instanceof List) {
-            List<Object> list = (List<Object>) obj;
-            // SignalR detection: same logic as collapseEmbeddedJson in the encoder
-            boolean isSignalR = list.size() >= 3
-                && list.get(1) instanceof String
-                && SIGNALR_JSON_ARG_METHODS.contains(list.get(1));
-
-            List<Object> result = new ArrayList<>(list.size());
-            for (int i = 0; i < list.size(); i++) {
-                result.add(expand(list.get(i), isSignalR, i));
+            
+            // 2. Check for flat test structure:
+            if (list.size() >= 5
+                    && list.get(1) instanceof String
+                    && SIGNALR_JSON_ARG_METHODS.contains(list.get(1))) {
+                Object arg = list.get(4);
+                if (arg instanceof String) {
+                    list.set(4, tryParseJson((String) arg));
+                }
+                return list;
             }
-            return result;
+
+            // Recurse on list elements
+            for (int i = 0; i < list.size(); i++) {
+                list.set(i, expandEmbeddedJson(list.get(i)));
+            }
+            return list;
         }
+        
         if (obj instanceof Map) {
             Map<String, Object> map = (Map<String, Object>) obj;
-            Map<String, Object> result = new LinkedHashMap<>(map.size());
+            Map<String, Object> result = new LinkedHashMap<>();
             for (Map.Entry<String, Object> entry : map.entrySet()) {
-                // Maps propagate parentIsSignalR and use fieldIndex=-1,
-                // matching collapseEmbeddedJson's Map handling.
-                result.put(entry.getKey(), expand(entry.getValue(), parentIsSignalR, -1));
+                result.put(entry.getKey(), expandEmbeddedJson(entry.getValue()));
             }
             return result;
         }
+        
         return obj;
+    }
+
+    /**
+     * Returns the index within the Arguments list that holds the
+     * embedded-JSON string for the given SignalR method.
+     * MUST stay in sync with BlazorPackEncoder.signalRJsonArgIndex().
+     */
+    private static int signalRJsonArgIndex(String target) {
+        switch (target) {
+            case "BeginInvokeDotNetFromJS": return 4;
+            case "DispatchEventAsync":     return 1;
+            case "EndInvokeJSFromDotNet":  return 2;
+            default: return -1;
+        }
     }
 
     // ---- Helpers ----
