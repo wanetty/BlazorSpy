@@ -107,6 +107,9 @@ public class BlazorPackDecoder {
                 // Strip trailing spaces, newlines, and record separators (0x1e)
                 String text = new String(body, StandardCharsets.UTF_8).replaceAll("[ \n\r\u001e]+$", "");
                 Object parsed = GSON.fromJson(text, Object.class);
+                // Normalize numbers in JSON literals too (same issue as encoder:
+                // Gson parses all numbers as Double, breaking integer types)
+                parsed = BlazorPackEncoder.normalizeNumbers(parsed);
                 return new DecodeResult(Collections.singletonList(parsed), new byte[0], false);
             } catch (Exception e) {
                 Map<String, Object> err = new LinkedHashMap<>();
@@ -425,7 +428,11 @@ public class BlazorPackDecoder {
                     if (targetIndex >= 0 && args.size() > targetIndex) {
                         Object arg = args.get(targetIndex);
                         if (arg instanceof String) {
-                            args.set(targetIndex, tryParseJson((String) arg));
+                            String s = ((String) arg).trim();
+                            if (s.startsWith("{") || s.startsWith("[")) {
+                                try { args.set(targetIndex, GSON.fromJson(s, Object.class)); }
+                                catch (Exception ignored) { }
+                            }
                         }
                     }
                     list.set(4, args);
@@ -439,7 +446,11 @@ public class BlazorPackDecoder {
                     && SIGNALR_JSON_ARG_METHODS.contains(list.get(1))) {
                 Object arg = list.get(4);
                 if (arg instanceof String) {
-                    list.set(4, tryParseJson((String) arg));
+                    String s = ((String) arg).trim();
+                    if (s.startsWith("{") || s.startsWith("[")) {
+                        try { list.set(4, GSON.fromJson(s, Object.class)); }
+                        catch (Exception ignored) { }
+                    }
                 }
                 return list;
             }
